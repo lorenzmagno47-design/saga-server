@@ -85,7 +85,7 @@ async def handle_message(ws, message):
             conn = connections.get(ws)
             if not conn: return
             rooms[conn['room_code']]['state'] = 'scenario'
-            await broadcast_all(conn['room_code'], {'type': 'start_scenario', 'data': {}})
+            # Host-only scenario selection; do not broadcast scenario screen to players.
 
         elif msg_type == 'submit_scenario':
             conn = connections.get(ws)
@@ -94,10 +94,22 @@ async def handle_message(ws, message):
             if not room: return
             if not any(s['playerId'] == payload['playerId'] for s in room['submitted_scenarios']):
                 room['submitted_scenarios'].append(payload)
-            await broadcast_all(conn['room_code'], {'type': 'scenario_submitted', 'data': payload})
-            if len(room['submitted_scenarios']) >= len(room['players']):
-                room['state'] = 'voting'
-                await broadcast_all(conn['room_code'], {'type': 'start_voting', 'data': {'scenarios': room['submitted_scenarios']}})
+            # If host submitted, start game immediately
+            if payload['playerId'] == room['host_id']:
+                room['scenario'] = payload['text']
+                room['genre'] = payload.get('genre', {})
+                room['state'] = 'playing'
+                room['current_player_index'] = 0
+                room['turn_count'] = 0
+                room['round_count'] = 1
+                room['story_messages'] = []
+                room['story_history'] = []
+                await broadcast_room(conn['room_code'], {'type': 'start_game', 'data': {
+                    'scenario': room['scenario'], 'genre': room['genre'], 'players': room['players'],
+                }}, exclude=ws)
+                log(f"Game started in room {conn['room_code']} by host")
+            else:
+                await broadcast_all(conn['room_code'], {'type': 'scenario_submitted', 'data': payload})
 
         elif msg_type == 'cast_vote':
             conn = connections.get(ws)
@@ -128,9 +140,9 @@ async def handle_message(ws, message):
             room['round_count'] = 1
             room['story_messages'] = []
             room['story_history'] = []
-            await broadcast_all(conn['room_code'], {'type': 'start_game', 'data': {
+            await broadcast_room(conn['room_code'], {'type': 'start_game', 'data': {
                 'scenario': room['scenario'], 'genre': room['genre'], 'players': room['players'],
-            }})
+            }}, exclude=ws)
             log(f"Game started in room {conn['room_code']}")
 
         elif msg_type == 'player_action':
@@ -143,12 +155,12 @@ async def handle_message(ws, message):
             if next_index == 0: room['round_count'] += 1
             room['current_player_index'] = next_index
             room['story_messages'].append({'role': 'user', 'content': payload.get('playerName', '') + ': ' + payload.get('text', '')})
-            await broadcast_all(conn['room_code'], {'type': 'player_action', 'data': {
+            await broadcast_room(conn['room_code'], {'type': 'player_action', 'data': {
                 'text': payload.get('text'), 'playerName': payload.get('playerName'),
                 'playerColor': payload.get('playerColor'),
                 'currentPlayerIndex': room['current_player_index'],
                 'turnCount': room['turn_count'], 'roundCount': room['round_count'],
-            }})
+            }}, exclude=ws)
 
         elif msg_type == 'narration':
             conn = connections.get(ws)
