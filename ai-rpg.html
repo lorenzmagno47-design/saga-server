@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAGA — AI Text RPG</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg:#0d0b0f; --bg2:#13101a; --bg3:#1c1826; --border:#2e2840;
+  --text:#e8e0f0; --text2:#9080b0; --gold:#c9a84c; --gold2:#f0d080;
+  --red:#c84b4b; --green:#4bc86a; --blue:#4b8bc8; --purple:#8b4bc8;
+  --glow:rgba(201,168,76,0.15);
+}
+body { font-family:'Crimson Pro',serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; overscroll-behavior:none; }
+body::before { content:''; position:fixed; inset:0; background:radial-gradient(ellipse at 10% 20%,rgba(139,75,200,0.08) 0%,transparent 50%),radial-gradient(ellipse at 90% 80%,rgba(201,168,76,0.06) 0%,transparent 50%); pointer-events:none; z-index:0; }
+.screen { display:none; min-height:100vh; position:relative; z-index:1; }
+.screen.active { display:flex; flex-direction:column; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+@keyframes flicker { 0%,100%{opacity:1} 50%{opacity:0.85} }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 var(--glow)} 50%{box-shadow:0 0 20px 4px var(--glow)} }
+@keyframes spin { to{transform:rotate(360deg)} }
+@keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+.logo { font-family:'Cinzel',serif; font-size:52px; font-weight:900; letter-spacing:0.15em; background:linear-gradient(135deg,var(--gold),var(--gold2),var(--gold)); background-size:200% auto; -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; animation:shimmer 3s linear infinite,flicker 4s ease-in-out infinite; }
+.subtitle { font-size:13px; letter-spacing:0.3em; text-transform:uppercase; color:var(--text2); margin-top:6px; }
+.divider { width:120px; height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:20px auto; }
+.btn { font-family:'Cinzel',serif; font-size:13px; letter-spacing:0.1em; padding:12px 28px; border-radius:6px; border:1px solid var(--gold); background:transparent; color:var(--gold); cursor:pointer; transition:all 0.2s; text-transform:uppercase; }
+.btn:hover { background:var(--glow); box-shadow:0 0 16px var(--glow); }
+.btn:active { transform:scale(0.97); }
+.btn-primary { background:linear-gradient(135deg,#3a2a0a,#5a4010); border-color:var(--gold); color:var(--gold2); }
+.btn-primary:hover { background:linear-gradient(135deg,#5a4010,#7a5820); }
+.btn-danger { border-color:var(--red); color:var(--red); }
+.btn-danger:hover { background:rgba(200,75,75,0.1); }
+.btn-sm { font-size:11px; padding:8px 16px; }
+.btn:disabled { opacity:0.4; cursor:not-allowed; }
+input, textarea, select { width:100%; background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:12px 14px; color:var(--text); font-family:'Crimson Pro',serif; font-size:16px; outline:none; transition:border-color 0.2s; }
+input:focus, textarea:focus, select:focus { border-color:var(--gold); }
+input::placeholder, textarea::placeholder { color:var(--text2); }
+select option { background:var(--bg2); }
+.field { margin-bottom:16px; }
+.field label { display:block; font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text2); margin-bottom:6px; font-family:'Cinzel',serif; }
+
+/* LANDING */
+#screen-landing { align-items:center; justify-content:center; text-align:center; padding:40px 20px; }
+.landing-hero { animation:fadeUp 0.8s ease; max-width:500px; }
+.landing-desc { font-size:18px; color:var(--text2); line-height:1.7; margin:0 auto 36px; font-style:italic; }
+.landing-btns { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:28px; }
+.api-section { max-width:400px; margin:0 auto; animation:fadeUp 1s ease; }
+.api-section label { display:block; font-size:12px; letter-spacing:0.15em; text-transform:uppercase; color:var(--text2); margin-bottom:8px; font-family:'Cinzel',serif; }
+.server-section { max-width:400px; margin:16px auto 0; }
+.api-note { font-size:12px; color:var(--text2); margin-top:8px; text-align:center; }
+.conn-status { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-family:'Cinzel',serif; letter-spacing:0.05em; margin-top:8px; }
+.conn-dot { width:8px; height:8px; border-radius:50%; background:var(--text2); }
+.conn-dot.connected { background:var(--green); box-shadow:0 0 8px var(--green); }
+.conn-dot.error { background:var(--red); }
+
+/* LOBBY */
+#screen-lobby { align-items:center; justify-content:center; padding:40px 20px; }
+.lobby-container { width:100%; max-width:480px; animation:fadeUp 0.6s ease; }
+.lobby-header { text-align:center; margin-bottom:32px; }
+.lobby-tabs { display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:24px; }
+.lobby-tab { flex:1; padding:12px; text-align:center; cursor:pointer; font-family:'Cinzel',serif; font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text2); background:var(--bg2); border:none; transition:all 0.2s; }
+.lobby-tab.active { background:var(--bg3); color:var(--gold); border-bottom:2px solid var(--gold); }
+.lobby-panel { display:none; }
+.lobby-panel.active { display:block; }
+.room-code-display { font-family:'Cinzel',serif; font-size:36px; font-weight:700; letter-spacing:0.3em; color:var(--gold); text-align:center; padding:20px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; margin:12px 0; animation:pulse 2s infinite; }
+
+/* WAITING */
+#screen-waiting { align-items:center; justify-content:center; padding:40px 20px; }
+.waiting-container { width:100%; max-width:560px; animation:fadeUp 0.6s ease; }
+.waiting-header { text-align:center; margin-bottom:28px; }
+.room-info { display:flex; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
+.room-info-item { flex:1; min-width:120px; text-align:center; background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:14px; }
+.room-info-item .label { font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text2); font-family:'Cinzel',serif; margin-bottom:6px; }
+.room-info-item .value { font-family:'Cinzel',serif; font-size:22px; color:var(--gold); font-weight:700; }
+.players-list { margin-bottom:24px; }
+.players-list h3 { font-family:'Cinzel',serif; font-size:13px; letter-spacing:0.15em; text-transform:uppercase; color:var(--text2); margin-bottom:12px; }
+.player-item { display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; margin-bottom:8px; animation:fadeUp 0.3s ease; }
+.player-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-weight:700; font-size:14px; color:white; flex-shrink:0; }
+.player-name { flex:1; font-size:16px; }
+.player-host { font-size:11px; color:var(--gold); font-family:'Cinzel',serif; letter-spacing:0.1em; }
+.waiting-actions { display:flex; gap:12px; flex-wrap:wrap; }
+
+/* SCENARIO */
+#screen-scenario { align-items:center; justify-content:center; padding:40px 20px; }
+.scenario-container { width:100%; max-width:680px; animation:fadeUp 0.6s ease; }
+.scenario-header { text-align:center; margin-bottom:28px; }
+.genre-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; margin-bottom:24px; }
+.genre-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:18px 14px; text-align:center; cursor:pointer; transition:all 0.2s; }
+.genre-card:hover { border-color:var(--gold); transform:translateY(-2px); }
+.genre-card.selected { border-color:var(--gold); background:var(--bg3); box-shadow:0 0 16px var(--glow); }
+.genre-icon { font-size:28px; margin-bottom:8px; }
+.genre-name { font-family:'Cinzel',serif; font-size:12px; letter-spacing:0.05em; color:var(--gold); }
+.genre-desc { font-size:12px; color:var(--text2); margin-top:4px; font-style:italic; }
+.scenario-divider { text-align:center; font-family:'Cinzel',serif; font-size:12px; letter-spacing:0.2em; text-transform:uppercase; color:var(--text2); margin:20px 0; display:flex; align-items:center; gap:12px; }
+.scenario-divider::before,.scenario-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* VOTING */
+#screen-voting { align-items:center; justify-content:center; padding:40px 20px; }
+.voting-container { width:100%; max-width:640px; animation:fadeUp 0.6s ease; }
+.voting-header { text-align:center; margin-bottom:28px; }
+.vote-timer { font-family:'Cinzel',serif; font-size:48px; font-weight:700; color:var(--gold); text-align:center; margin-bottom:20px; animation:flicker 1s ease-in-out infinite; }
+.scenario-vote-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:20px; margin-bottom:12px; cursor:pointer; transition:all 0.2s; display:flex; gap:16px; align-items:flex-start; }
+.scenario-vote-card:hover { border-color:var(--gold); }
+.scenario-vote-card.voted { border-color:var(--gold); background:var(--bg3); box-shadow:0 0 16px var(--glow); }
+.vote-num { font-family:'Cinzel',serif; font-size:24px; font-weight:700; color:var(--text2); flex-shrink:0; width:32px; }
+.scenario-vote-card.voted .vote-num { color:var(--gold); }
+.vote-content { flex:1; }
+.vote-scenario-text { font-size:16px; line-height:1.6; margin-bottom:8px; }
+.vote-meta { font-size:12px; color:var(--text2); font-family:'Cinzel',serif; letter-spacing:0.05em; }
+.vote-count { font-size:13px; color:var(--gold); margin-top:6px; font-family:'Cinzel',serif; }
+
+/* GAME */
+#screen-game { flex-direction:column; height:100vh; overflow:hidden; }
+.game-header { display:flex; align-items:center; justify-content:space-between; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--bg2); flex-shrink:0; flex-wrap:wrap; gap:8px; }
+.game-title { font-family:'Cinzel',serif; font-size:16px; color:var(--gold); letter-spacing:0.1em; }
+.game-meta { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+.game-meta-item { font-size:12px; color:var(--text2); font-family:'Cinzel',serif; }
+.game-meta-item span { color:var(--gold); }
+.game-body { display:flex; flex:1; overflow:hidden; }
+.story-panel { flex:1; display:flex; flex-direction:column; overflow:hidden; border-right:1px solid var(--border); }
+.story-scroll { flex:1; overflow-y:auto; padding:20px; scroll-behavior:smooth; }
+.story-scroll::-webkit-scrollbar { width:4px; }
+.story-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+.story-entry { margin-bottom:20px; animation:fadeUp 0.4s ease; }
+.story-entry.narration .entry-text { font-size:17px; line-height:1.8; color:var(--text); font-style:italic; padding:16px; background:var(--bg2); border-left:3px solid var(--gold); border-radius:0 8px 8px 0; }
+.story-entry.player-action .entry-text { font-size:16px; line-height:1.7; color:var(--text2); padding:12px 16px; background:var(--bg3); border-radius:8px; border:1px solid var(--border); }
+.entry-meta { font-size:11px; color:var(--text2); font-family:'Cinzel',serif; letter-spacing:0.05em; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+.player-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.ai-typing { padding:16px; background:var(--bg2); border-left:3px solid var(--gold); border-radius:0 8px 8px 0; margin:0 20px 20px; display:none; }
+.typing-dots { display:flex; gap:6px; align-items:center; }
+.typing-dot { width:8px; height:8px; border-radius:50%; background:var(--gold); animation:typingBounce 1.2s infinite; opacity:0.4; }
+.typing-dot:nth-child(2) { animation-delay:0.2s; }
+.typing-dot:nth-child(3) { animation-delay:0.4s; }
+@keyframes typingBounce { 0%,60%,100%{transform:translateY(0);opacity:0.4} 30%{transform:translateY(-6px);opacity:1} }
+.action-panel { flex-shrink:0; padding:16px 20px; border-top:1px solid var(--border); background:var(--bg2); }
+.turn-indicator { font-family:'Cinzel',serif; font-size:12px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.turn-dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); }
+.action-input-row { display:flex; gap:10px; align-items:flex-end; }
+#action-input { flex:1; resize:none; min-height:48px; max-height:100px; font-size:16px; line-height:1.5; }
+.action-btn { width:48px; height:48px; border-radius:8px; background:linear-gradient(135deg,#3a2a0a,#5a4010); border:1px solid var(--gold); color:var(--gold); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:20px; transition:all 0.2s; }
+.action-btn:hover { background:linear-gradient(135deg,#5a4010,#7a5820); }
+.action-btn:disabled { opacity:0.3; cursor:not-allowed; }
+.sidebar { width:220px; flex-shrink:0; display:flex; flex-direction:column; overflow:hidden; background:var(--bg2); }
+.sidebar-section { padding:14px; border-bottom:1px solid var(--border); }
+.sidebar-title { font-family:'Cinzel',serif; font-size:11px; letter-spacing:0.15em; text-transform:uppercase; color:var(--text2); margin-bottom:10px; }
+.sidebar-player { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; margin-bottom:4px; }
+.sidebar-player.current-turn { background:var(--bg3); border:1px solid var(--gold); }
+.savatar { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-weight:700; font-size:11px; color:white; flex-shrink:0; }
+.sname { font-size:14px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sturn { font-size:10px; color:var(--gold); font-family:'Cinzel',serif; }
+.sidebar-scroll { flex:1; overflow-y:auto; padding:14px; }
+.sidebar-scroll::-webkit-scrollbar { width:3px; }
+
+/* GAME OVER */
+#screen-gameover { align-items:center; justify-content:center; padding:40px 20px; text-align:center; }
+.gameover-container { max-width:480px; animation:fadeUp 0.6s ease; }
+.gameover-title { font-family:'Cinzel',serif; font-size:48px; font-weight:900; color:var(--gold); margin-bottom:12px; }
+.gameover-story { font-size:16px; line-height:1.8; color:var(--text2); font-style:italic; margin:20px 0; padding:20px; background:var(--bg2); border:1px solid var(--border); border-radius:10px; max-height:300px; overflow-y:auto; }
+
+/* TOAST */
+.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--bg2); border:1px solid var(--gold); color:var(--gold); padding:10px 20px; border-radius:8px; font-family:'Cinzel',serif; font-size:13px; letter-spacing:0.05em; z-index:999; animation:fadeUp 0.3s ease; pointer-events:none; white-space:nowrap; }
+.toast.error { border-color:var(--red); color:var(--red); }
+
+/* LOADING */
+#loading-overlay { position:fixed; inset:0; background:rgba(13,11,15,0.92); display:none; align-items:center; justify-content:center; z-index:500; flex-direction:column; gap:16px; }
+#loading-overlay.active { display:flex; }
+.spinner { width:48px; height:48px; border:3px solid var(--border); border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; }
+.loading-text { font-family:'Cinzel',serif; font-size:14px; letter-spacing:0.1em; color:var(--gold); }
+
+@media(max-width:600px) { .sidebar{display:none;} .logo{font-size:36px;} .genre-grid{grid-template-columns:repeat(2,1fr);} }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">The AI weaves your fate...</div>
+</div>
+
+<!-- LANDING -->
+<div id="screen-landing" class="screen active">
+  <div class="landing-hero">
+    <div class="logo">SAGA</div>
+    <div class="subtitle">AI-Powered Multiplayer Text RPG</div>
+    <div class="divider"></div>
+    <div class="landing-desc">Enter a world shaped by your choices. Play alone or with friends — let AI be your Game Master.</div>
+    <div class="landing-btns">
+      <button class="btn btn-primary" onclick="goToLobby()">⚔️ Enter the Realm</button>
+    </div>
+    <div class="api-section">
+      <label>Groq API Key</label>
+      <input type="password" id="api-key-input" placeholder="gsk_..." autocomplete="off" />
+      <div class="api-note">Free at <a href="https://console.groq.com" target="_blank" style="color:var(--gold)">console.groq.com</a></div>
+    </div>
+    <div class="server-section">
+      <div class="field">
+        <label>Server URL</label>
+        <input type="text" id="server-url-input" placeholder="wss://your-server.onrender.com" value="" />
+      </div>
+      <div style="text-align:center">
+        <button class="btn btn-sm" onclick="testConnection()">Test Connection</button>
+        <div class="conn-status" id="conn-status">
+          <div class="conn-dot" id="conn-dot"></div>
+          <span id="conn-text">Not connected</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LOBBY -->
+<div id="screen-lobby" class="screen">
+  <div class="lobby-container">
+    <div class="lobby-header">
+      <div class="logo" style="font-size:32px">SAGA</div>
+      <div class="subtitle">Choose Your Path</div>
+    </div>
+    <div class="lobby-tabs">
+      <button class="lobby-tab active" onclick="switchTab('create')">Create Room</button>
+      <button class="lobby-tab" onclick="switchTab('join')">Join Room</button>
+      <button class="lobby-tab" onclick="switchTab('solo')">Solo Play</button>
+    </div>
+    <div class="lobby-panel active" id="panel-create">
+      <div class="field"><label>Your Name</label><input type="text" id="create-name" placeholder="Enter your name..." maxlength="20" /></div>
+      <div class="field"><label>Max Players</label>
+        <select id="create-maxplayers">
+          <option value="2">2 Players</option>
+          <option value="3">3 Players</option>
+          <option value="4" selected>4 Players</option>
+          <option value="5">5 Players</option>
+          <option value="6">6 Players</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="createRoom()">Create Room</button>
+    </div>
+    <div class="lobby-panel" id="panel-join">
+      <div class="field"><label>Your Name</label><input type="text" id="join-name" placeholder="Enter your name..." maxlength="20" /></div>
+      <div class="field"><label>Room Code</label><input type="text" id="join-code" placeholder="XXXX" maxlength="4" style="text-transform:uppercase;font-family:'Cinzel',serif;letter-spacing:0.2em;font-size:22px;text-align:center" /></div>
+      <button class="btn btn-primary" style="width:100%" onclick="joinRoom()">Join Room</button>
+    </div>
+    <div class="lobby-panel" id="panel-solo">
+      <div class="field"><label>Your Name</label><input type="text" id="solo-name" placeholder="Enter your name..." maxlength="20" /></div>
+      <p style="color:var(--text2);font-size:15px;line-height:1.7;margin-bottom:20px;font-style:italic">Play alone with the AI as your Game Master. No server needed for solo play.</p>
+      <button class="btn btn-primary" style="width:100%" onclick="startSolo()">Begin Solo Quest</button>
+    </div>
+    <div style="margin-top:16px;text-align:center">
+      <button class="btn btn-sm" onclick="showScreen('screen-landing')">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- WAITING ROOM -->
+<div id="screen-waiting" class="screen">
+  <div class="waiting-container">
+    <div class="waiting-header">
+      <div style="font-family:'Cinzel',serif;font-size:13px;letter-spacing:0.2em;text-transform:uppercase;color:var(--text2);margin-bottom:8px">Room Code</div>
+      <div class="room-code-display" id="display-room-code">----</div>
+      <div style="font-size:14px;color:var(--text2);margin-top:8px">Share this code with your friends</div>
+    </div>
+    <div class="room-info">
+      <div class="room-info-item"><div class="label">Players</div><div class="value" id="display-player-count">1/4</div></div>
+      <div class="room-info-item"><div class="label">Status</div><div class="value" style="font-size:14px;color:var(--green)" id="display-status">Waiting...</div></div>
+    </div>
+    <div class="players-list">
+      <h3>Players in Room</h3>
+      <div id="players-list-container"></div>
+    </div>
+    <div class="waiting-actions">
+      <button class="btn btn-primary" id="btn-start-game" onclick="proceedToScenario()" style="flex:1">⚔️ Start Adventure</button>
+      <button class="btn btn-danger btn-sm" onclick="leaveRoom()">Leave</button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-top:10px;text-align:center" id="waiting-hint"></div>
+  </div>
+</div>
+
+<!-- SCENARIO -->
+<div id="screen-scenario" class="screen">
+  <div class="scenario-container">
+    <div class="scenario-header">
+      <div class="logo" style="font-size:28px">Choose Your World</div>
+      <div class="subtitle">Select a Genre or Write Your Own</div>
+    </div>
+    <div class="genre-grid" id="genre-grid"></div>
+    <div class="scenario-divider">or write your own</div>
+    <div class="field"><label>Custom Scenario</label><textarea id="custom-scenario" rows="4" placeholder="Describe your world, setting, and starting situation..."></textarea></div>
+    <div style="display:flex;gap:12px;margin-top:20px">
+      <button class="btn btn-primary" style="flex:1" id="submit-scenario-btn" onclick="submitScenario()">Submit Scenario →</button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-top:10px;text-align:center" id="scenario-hint"></div>
+  </div>
+</div>
+
+<!-- VOTING -->
+<div id="screen-voting" class="screen">
+  <div class="voting-container">
+    <div class="voting-header">
+      <div class="logo" style="font-size:28px">Vote for Your Fate</div>
+      <div class="subtitle">Choose the scenario you want to play</div>
+    </div>
+    <div class="vote-timer" id="vote-timer">30</div>
+    <div id="vote-cards-container"></div>
+    <div style="margin-top:20px;text-align:center">
+      <button class="btn btn-primary" onclick="concludeVoting()">Confirm & Continue →</button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-top:10px;text-align:center">Vote for the scenario you want to play. Highest votes wins!</div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="screen-game" class="screen">
+  <div class="game-header">
+    <div class="game-title" id="game-genre-label">⚔️ Adventure</div>
+    <div class="game-meta">
+      <div class="game-meta-item">Turn <span id="turn-counter">1</span></div>
+      <div class="game-meta-item">Round <span id="round-counter">1</span></div>
+      <div class="game-meta-item" id="mode-label">Multiplayer</div>
+      <button class="btn btn-sm btn-danger" onclick="endGame()">End Game</button>
+    </div>
+  </div>
+  <div class="game-body">
+    <div class="story-panel">
+      <div class="story-scroll" id="story-scroll"></div>
+      <div class="ai-typing" id="ai-typing">
+        <div style="font-size:12px;color:var(--gold);font-family:'Cinzel',serif;letter-spacing:0.05em;margin-bottom:8px">The Narrator speaks...</div>
+        <div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
+      </div>
+      <div class="action-panel">
+        <div class="turn-indicator"><div class="turn-dot" id="turn-dot"></div><span id="turn-text">Your turn</span></div>
+        <div class="action-input-row">
+          <textarea id="action-input" placeholder="Describe your action..." onkeydown="handleActionKey(event)" oninput="autoResizeAction(this)"></textarea>
+          <button class="action-btn" id="send-action-btn" onclick="submitAction()">⚔</button>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar">
+      <div class="sidebar-section"><div class="sidebar-title">Players</div><div id="sidebar-players"></div></div>
+      <div class="sidebar-scroll"><div class="sidebar-title">Quest Log</div><div id="quest-log" style="font-size:13px;color:var(--text2);line-height:1.6"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div id="screen-gameover" class="screen">
+  <div class="gameover-container">
+    <div class="gameover-title">Quest Complete</div>
+    <div class="divider"></div>
+    <div class="gameover-story" id="gameover-summary"></div>
+    <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="restartGame()">⚔️ New Adventure</button>
+      <button class="btn" onclick="showScreen('screen-landing')">Return to Realm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const GENRES = [
+  {id:'fantasy',icon:'⚔️',name:'Fantasy',desc:'Swords, magic & dragons',prompt:'a high fantasy world with magic, mythical creatures, and ancient kingdoms'},
+  {id:'horror',icon:'👻',name:'Horror',desc:'Dark, terrifying tales',prompt:'a psychological horror setting with supernatural elements, dread, and mystery'},
+  {id:'scifi',icon:'🚀',name:'Sci-Fi',desc:'Space & technology',prompt:'a futuristic science fiction universe with advanced technology, space travel, and alien civilizations'},
+  {id:'mystery',icon:'🔍',name:'Mystery',desc:'Solve the unknown',prompt:'a noir mystery setting full of clues, suspects, and dark secrets'},
+  {id:'apocalypse',icon:'☢️',name:'Apocalypse',desc:'Survive the end',prompt:'a post-apocalyptic wasteland where survivors struggle against harsh environments and hostile factions'},
+  {id:'pirate',icon:'🏴‍☠️',name:'Pirates',desc:'Sail the high seas',prompt:'a golden age of piracy with swashbuckling adventures, treasure hunts, and naval battles'},
+  {id:'western',icon:'🤠',name:'Western',desc:'Wild frontier',prompt:'the wild west with outlaws, sheriffs, frontier towns, and vast uncharted territories'},
+  {id:'cyberpunk',icon:'🤖',name:'Cyberpunk',desc:'Neon & chrome',prompt:'a dystopian cyberpunk city where megacorporations rule, hackers roam, and technology has merged with humanity'},
+  {id:'mythology',icon:'⚡',name:'Mythology',desc:'Gods & legends',prompt:'the age of mythology where gods, heroes, and monsters clash in epic battles across legendary lands'},
+  {id:'medieval',icon:'🏰',name:'Medieval',desc:'Knights & castles',prompt:'a medieval kingdom with political intrigue, chivalric knights, and battles for the crown'},
+];
+
+const PLAYER_COLORS = ['#c84b4b','#4bc86a','#4b8bc8','#c9a84c','#8b4bc8','#c84b8b'];
+
+let state = {
+  apiKey:'', serverUrl:'', playerName:'', playerId:'',
+  roomCode:'', isHost:false, isSolo:false,
+  players:[], maxPlayers:4, genre:null, scenario:'',
+  submittedScenarios:[], myVote:null,
+  currentPlayerIndex:0, turnCount:0, roundCount:1,
+  storyMessages:[], gameActive:false,
+};
+
+let ws = null;
+let voteTimerInterval = null;
+let isGenerating = false;
+
+// ── WEBSOCKET ──
+function connectWS(url) {
+  return new Promise((resolve, reject) => {
+    try {
+      const socket = new WebSocket(url);
+      socket.onopen = () => resolve(socket);
+      socket.onerror = () => reject(new Error('Connection failed'));
+      setTimeout(() => reject(new Error('Connection timeout')), 5000);
+    } catch(e) { reject(e); }
+  });
+}
+
+function setupWS(socket) {
+  ws = socket;
+  ws.onmessage = (event) => {
+    try { handleServerMessage(JSON.parse(event.data)); }
+    catch(e) { console.error('Parse error:', e); }
+  };
+  ws.onclose = () => {
+    ws = null;
+    if (state.gameActive) showToast('Disconnected from server', 'error');
+    updateConnStatus(false);
+  };
+  ws.onerror = () => showToast('Server connection error', 'error');
+  updateConnStatus(true);
+}
+
+function sendToServer(type, data) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    showToast('Not connected to server', 'error');
+    return false;
+  }
+  ws.send(JSON.stringify({ type, data }));
+  return true;
+}
+
+function handleServerMessage(msg) {
+  const { type, data } = msg;
+  switch(type) {
+    case 'room_created':
+      state.roomCode = data.roomCode;
+      state.players = data.players;
+      state.maxPlayers = data.maxPlayers;
+      showScreen('screen-waiting');
+      renderWaitingRoom();
+      break;
+    case 'room_joined':
+      state.roomCode = data.roomCode;
+      state.players = data.players;
+      state.maxPlayers = data.maxPlayers;
+      showScreen('screen-waiting');
+      renderWaitingRoom();
+      break;
+    case 'player_joined':
+      if (!state.players.find(p => p.id === data.id)) state.players.push(data);
+      renderWaitingRoom();
+      showToast(data.name + ' joined!');
+      break;
+    case 'player_left':
+      state.players = data.players || state.players.filter(p => p.id !== data.playerId);
+      renderWaitingRoom();
+      renderSidebarPlayers();
+      showToast(data.playerName + ' left the realm.');
+      break;
+    case 'host_changed':
+      state.players = data.players;
+      if (data.newHostId === state.playerId) {
+        state.isHost = true;
+        showToast('You are now the host!');
+      }
+      renderWaitingRoom();
+      break;
+    case 'start_scenario':
+      renderGenreGrid();
+      updateScenarioHint();
+      showScreen('screen-scenario');
+      break;
+    case 'scenario_submitted':
+      if (!state.submittedScenarios.find(s => s.playerId === data.playerId)) {
+        state.submittedScenarios.push(data);
+      }
+      break;
+    case 'start_voting':
+      state.submittedScenarios = data.scenarios;
+      showVoting();
+      break;
+    case 'vote_cast':
+      state.submittedScenarios = data.scenarios;
+      renderVoteCards();
+      break;
+    case 'start_game':
+      state.scenario = data.scenario;
+      state.genre = data.genre;
+      state.players = data.players || state.players;
+      state.currentPlayerIndex = 0;
+      state.storyMessages = [];
+      state.turnCount = 0;
+      state.roundCount = 1;
+      state.gameActive = true;
+      startGame();
+      break;
+    case 'player_action':
+      const actor = state.players.find(p => p.name === data.playerName);
+      addStoryEntry('player-action', data.text, data.playerName, data.playerColor || actor?.color);
+      state.storyMessages.push({role:'user', content: data.playerName + ': ' + data.text});
+      state.currentPlayerIndex = data.currentPlayerIndex;
+      state.turnCount = data.turnCount;
+      state.roundCount = data.roundCount;
+      updateQuestLog(data.playerName + ': ' + data.text.substring(0, 50) + '...');
+      // Only non-host shows typing; host already generated narration directly
+      if (!state.isHost) { showTyping(); updateTurnUI(); renderSidebarPlayers(); }
+      break;
+    case 'narration':
+      hideTyping();
+      addStoryEntry('narration', data.text, 'Narrator');
+      state.storyMessages.push({role:'assistant', content: data.text});
+      state.currentPlayerIndex = data.currentPlayerIndex;
+      state.turnCount = data.turnCount;
+      state.roundCount = data.roundCount;
+      updateTurnUI();
+      renderSidebarPlayers();
+      break;
+    case 'game_ended':
+      state.gameActive = false;
+      showToast('The host ended the game.');
+      break;
+    case 'error':
+      showToast(data.message || 'Server error', 'error');
+      break;
+    case 'pong':
+      break;
+  }
+}
+
+// ── UI UTILS ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showToast(msg, type='normal', duration=3000) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.className = 'toast' + (type === 'error' ? ' error' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), duration);
+}
+
+function showLoading(show, text='The AI weaves your fate...') {
+  const el = document.getElementById('loading-overlay');
+  el.classList.toggle('active', show);
+  el.querySelector('.loading-text').textContent = text;
+}
+
+function updateConnStatus(connected) {
+  const dot = document.getElementById('conn-dot');
+  const text = document.getElementById('conn-text');
+  if (connected) {
+    dot.className = 'conn-dot connected';
+    text.textContent = 'Connected';
+  } else {
+    dot.className = 'conn-dot';
+    text.textContent = 'Not connected';
+  }
+}
+
+// ── LANDING ──
+async function testConnection() {
+  const url = document.getElementById('server-url-input').value.trim();
+  if (!url) { showToast('Enter server URL first', 'error'); return; }
+  try {
+    document.getElementById('conn-text').textContent = 'Connecting...';
+    const socket = await connectWS(url);
+    setupWS(socket);
+    state.serverUrl = url;
+    showToast('Connected to server!');
+  } catch(e) {
+    document.getElementById('conn-dot').className = 'conn-dot error';
+    document.getElementById('conn-text').textContent = 'Failed';
+    showToast('Cannot connect: ' + e.message, 'error');
+  }
+}
+
+function goToLobby() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { showToast('Enter your Groq API key first', 'error'); return; }
+  state.apiKey = key;
+  showScreen('screen-lobby');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.lobby-tab').forEach((t,i) => {
+    t.classList.toggle('active', ['create','join','solo'][i] === tab);
+  });
+  document.querySelectorAll('.lobby-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+// ── ROOM MANAGEMENT ──
+function generateId() { return Math.random().toString(36).substr(2,9); }
+
+async function createRoom() {
+  const name = document.getElementById('create-name').value.trim();
+  if (!name) { showToast('Enter your name', 'error'); return; }
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    // Try to connect first
+    const url = document.getElementById('server-url-input').value.trim() || state.serverUrl;
+    if (!url) { showToast('Connect to server first on the main screen', 'error'); return; }
+    try {
+      const socket = await connectWS(url);
+      setupWS(socket);
+      state.serverUrl = url;
+    } catch(e) { showToast('Cannot connect to server', 'error'); return; }
+  }
+
+  state.playerName = name;
+  state.playerId = generateId();
+  state.isHost = true;
+  state.isSolo = false;
+  state.maxPlayers = parseInt(document.getElementById('create-maxplayers').value);
+  const color = PLAYER_COLORS[0];
+
+  sendToServer('create_room', {
+    playerId: state.playerId,
+    playerName: name,
+    maxPlayers: state.maxPlayers,
+    color,
+  });
+}
+
+async function joinRoom() {
+  const name = document.getElementById('join-name').value.trim();
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if (!name) { showToast('Enter your name', 'error'); return; }
+  if (code.length !== 4) { showToast('Enter valid 4-letter room code', 'error'); return; }
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    const url = document.getElementById('server-url-input').value.trim() || state.serverUrl;
+    if (!url) { showToast('Connect to server first on the main screen', 'error'); return; }
+    try {
+      const socket = await connectWS(url);
+      setupWS(socket);
+      state.serverUrl = url;
+    } catch(e) { showToast('Cannot connect to server', 'error'); return; }
+  }
+
+  state.playerName = name;
+  state.playerId = generateId();
+  state.isHost = false;
+  state.isSolo = false;
+  const color = PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)];
+
+  sendToServer('join_room', {
+    playerId: state.playerId,
+    playerName: name,
+    roomCode: code,
+    color,
+  });
+}
+
+function startSolo() {
+  const name = document.getElementById('solo-name').value.trim();
+  if (!name) { showToast('Enter your name', 'error'); return; }
+  state.playerName = name;
+  state.playerId = generateId();
+  state.isHost = true;
+  state.isSolo = true;
+  state.players = [{ id: state.playerId, name, isHost: true, color: PLAYER_COLORS[0] }];
+  proceedToScenario();
+}
+
+function leaveRoom() {
+  if (ws) { ws.close(); ws = null; }
+  state.players = []; state.roomCode = '';
+  showScreen('screen-lobby');
+}
+
+function renderWaitingRoom() {
+  document.getElementById('display-room-code').textContent = state.roomCode || '----';
+  document.getElementById('display-player-count').textContent = state.players.length + '/' + state.maxPlayers;
+  document.getElementById('players-list-container').innerHTML = state.players.map(p => `
+    <div class="player-item">
+      <div class="player-avatar" style="background:linear-gradient(135deg,${p.color},#2a1a4a)">${p.name[0].toUpperCase()}</div>
+      <div class="player-name">${p.name}</div>
+      ${p.isHost ? '<div class="player-host">HOST</div>' : ''}
+    </div>`).join('');
+
+  const startBtn = document.getElementById('btn-start-game');
+  const hint = document.getElementById('waiting-hint');
+  if (state.isHost) {
+    startBtn.disabled = false;
+    startBtn.textContent = '⚔️ Start Adventure';
+    hint.textContent = state.players.length === 1 ? 'Waiting for players, or start solo.' : state.players.length + ' players ready!';
+  } else {
+    startBtn.disabled = true;
+    startBtn.textContent = '⏳ Waiting for host...';
+    hint.textContent = 'Waiting for the host to start...';
+  }
+}
+
+// ── SCENARIO ──
+function proceedToScenario() {
+  if (!state.isSolo) sendToServer('start_scenario', {});
+  state.submittedScenarios = [];
+  state.myVote = null;
+  state.genre = null;
+  renderGenreGrid();
+  updateScenarioHint();
+  showScreen('screen-scenario');
+}
+
+function renderGenreGrid() {
+  document.getElementById('genre-grid').innerHTML = GENRES.map(g => `
+    <div class="genre-card" id="genre-${g.id}" onclick="selectGenre('${g.id}')">
+      <div class="genre-icon">${g.icon}</div>
+      <div class="genre-name">${g.name}</div>
+      <div class="genre-desc">${g.desc}</div>
+    </div>`).join('');
+}
+
+function selectGenre(id) {
+  state.genre = GENRES.find(g => g.id === id);
+  document.querySelectorAll('.genre-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('genre-' + id).classList.add('selected');
+  const ta = document.getElementById('custom-scenario');
+  if (!ta.value.trim()) {
+    ta.value = 'A group of adventurers begin an epic ' + state.genre.name + ' journey — ' + state.genre.prompt + '.';
+  }
+}
+
+function updateScenarioHint() {
+  document.getElementById('scenario-hint').textContent = state.isSolo
+    ? 'Choose a genre and describe your scenario, then begin your solo quest.'
+    : 'Each player submits a scenario. You\'ll vote on which one to play!';
+}
+
+function submitScenario() {
+  const text = document.getElementById('custom-scenario').value.trim();
+  if (!text && !state.genre) { showToast('Select a genre or write a scenario', 'error'); return; }
+  const scenarioText = text || ('A ' + state.genre.name + ' adventure — ' + state.genre.prompt);
+  const genreObj = state.genre || { id:'custom', name:'Custom', icon:'✨' };
+
+  if (state.isSolo) {
+    state.scenario = scenarioText;
+    state.genre = genreObj;
+    state.currentPlayerIndex = 0;
+    state.storyMessages = [];
+    state.turnCount = 0;
+    state.roundCount = 1;
+    state.gameActive = true;
+    startGame();
+    return;
+  }
+
+  const myScenario = { playerId: state.playerId, playerName: state.playerName, text: scenarioText, genre: genreObj, votes: 0 };
+  state.submittedScenarios.push(myScenario);
+  sendToServer('submit_scenario', myScenario);
+
+  const btn = document.getElementById('submit-scenario-btn');
+  btn.disabled = true;
+  btn.textContent = '✓ Submitted — waiting for others...';
+  showToast('Scenario submitted!');
+}
+
+// ── VOTING ──
+function showVoting() {
+  showScreen('screen-voting');
+  renderVoteCards();
+  startVoteTimer();
+}
+
+function renderVoteCards() {
+  document.getElementById('vote-cards-container').innerHTML = state.submittedScenarios.map((s,i) => `
+    <div class="scenario-vote-card ${state.myVote === s.playerId ? 'voted' : ''}" onclick="castVote('${s.playerId}')">
+      <div class="vote-num">${i+1}</div>
+      <div class="vote-content">
+        <div class="vote-scenario-text">${s.text}</div>
+        <div class="vote-meta">${s.genre.icon} ${s.genre.name} — by ${s.playerName}</div>
+        <div class="vote-count">${s.votes || 0} vote${s.votes !== 1 ? 's' : ''}</div>
+      </div>
+    </div>`).join('');
+}
+
+function castVote(scenarioPlayerId) {
+  if (state.myVote) { showToast('Already voted!'); return; }
+  state.myVote = scenarioPlayerId;
+  sendToServer('cast_vote', { scenarioPlayerId });
+  renderVoteCards();
+  showToast('Vote cast!');
+}
+
+function startVoteTimer() {
+  if (voteTimerInterval) clearInterval(voteTimerInterval);
+  let t = 30;
+  document.getElementById('vote-timer').textContent = t;
+  voteTimerInterval = setInterval(() => {
+    t--;
+    document.getElementById('vote-timer').textContent = t;
+    if (t <= 0) { clearInterval(voteTimerInterval); concludeVoting(); }
+  }, 1000);
+}
+
+function concludeVoting() {
+  if (voteTimerInterval) clearInterval(voteTimerInterval);
+  const winner = state.submittedScenarios.reduce((a,b) => (b.votes||0) > (a.votes||0) ? b : a, state.submittedScenarios[0]);
+  if (!winner) { showToast('No scenarios!', 'error'); return; }
+
+  state.scenario = winner.text;
+  state.genre = winner.genre;
+
+  if (state.isHost) {
+    sendToServer('start_game', { scenario: winner.text, genre: winner.genre });
+  }
+
+  state.currentPlayerIndex = 0;
+  state.storyMessages = [];
+  state.turnCount = 0;
+  state.roundCount = 1;
+  state.gameActive = true;
+  startGame();
+}
+
+// ── GAME ──
+async function startGame() {
+  showScreen('screen-game');
+  const g = state.genre || { icon:'⚔️', name:'Adventure' };
+  document.getElementById('game-genre-label').textContent = (g.icon||'') + ' ' + g.name;
+  document.getElementById('mode-label').textContent = state.isSolo ? 'Solo' : 'Multiplayer';
+  document.getElementById('story-scroll').innerHTML = '';
+  document.getElementById('quest-log').innerHTML = '';
+  renderSidebarPlayers();
+  updateTurnUI();
+  if (state.isHost || state.isSolo) await generateNarration('opening', null, null);
+  else showTyping();
+}
+
+function renderSidebarPlayers() {
+  document.getElementById('sidebar-players').innerHTML = state.players.map((p,i) => `
+    <div class="sidebar-player ${i === state.currentPlayerIndex ? 'current-turn' : ''}">
+      <div class="savatar" style="background:linear-gradient(135deg,${p.color},#2a1a4a)">${p.name[0].toUpperCase()}</div>
+      <div class="sname">${p.name}</div>
+      ${i === state.currentPlayerIndex ? '<div class="sturn">◆</div>' : ''}
+    </div>`).join('');
+}
+
+function updateTurnUI() {
+  const myIndex = state.players.findIndex(p => p.id === state.playerId);
+  const isMyTurn = state.isSolo || myIndex === state.currentPlayerIndex;
+  const currentPlayer = state.players[state.currentPlayerIndex];
+  document.getElementById('turn-counter').textContent = state.turnCount + 1;
+  document.getElementById('round-counter').textContent = state.roundCount;
+  const turnText = document.getElementById('turn-text');
+  const actionInput = document.getElementById('action-input');
+  const sendBtn = document.getElementById('send-action-btn');
+  const dot = document.getElementById('turn-dot');
+  if (isMyTurn && !isGenerating) {
+    turnText.textContent = 'Your turn — what do you do?';
+    actionInput.disabled = false;
+    sendBtn.disabled = false;
+    dot.style.background = 'var(--green)';
+    dot.style.boxShadow = '0 0 8px var(--green)';
+    actionInput.focus();
+  } else {
+    turnText.textContent = isGenerating ? 'AI is narrating...' : (currentPlayer?.name || '???') + '\'s turn...';
+    actionInput.disabled = true;
+    sendBtn.disabled = true;
+    dot.style.background = 'var(--text2)';
+    dot.style.boxShadow = 'none';
+  }
+}
+
+function addStoryEntry(type, text, authorName, color) {
+  const scroll = document.getElementById('story-scroll');
+  const entry = document.createElement('div');
+  entry.className = 'story-entry ' + type;
+  if (type === 'narration') {
+    entry.innerHTML = `<div class="entry-meta" style="color:var(--gold)"><span>📜 Narrator</span></div><div class="entry-text">${text.replace(/\n/g,'<br>')}</div>`;
+  } else {
+    entry.innerHTML = `<div class="entry-meta"><span class="player-dot" style="background:${color||'#888'}"></span><span style="color:${color||'var(--text2)'}">${authorName}</span></div><div class="entry-text">${text.replace(/\n/g,'<br>')}</div>`;
+  }
+  scroll.appendChild(entry);
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+function showTyping() { document.getElementById('ai-typing').style.display = 'block'; document.getElementById('story-scroll').scrollTop = 99999; }
+function hideTyping() { document.getElementById('ai-typing').style.display = 'none'; }
+
+function updateQuestLog(entry) {
+  const log = document.getElementById('quest-log');
+  const line = document.createElement('div');
+  line.style.cssText = 'margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--border)';
+  line.textContent = entry;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function handleActionKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitAction(); } }
+function autoResizeAction(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 100) + 'px'; }
+
+async function submitAction() {
+  const myIndex = state.players.findIndex(p => p.id === state.playerId);
+  const isMyTurn = state.isSolo || myIndex === state.currentPlayerIndex;
+  if (!isMyTurn || isGenerating) { showToast("It's not your turn!"); return; }
+
+  const input = document.getElementById('action-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  const myColor = state.players[myIndex]?.color || '#888';
+  addStoryEntry('player-action', text, state.playerName, myColor);
+  state.storyMessages.push({role:'user', content: state.playerName + ': ' + text});
+  updateQuestLog(state.playerName + ': ' + text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+
+  // Advance turn
+  state.turnCount++;
+  const nextIndex = (state.currentPlayerIndex + 1) % state.players.length;
+  if (nextIndex === 0) state.roundCount++;
+  state.currentPlayerIndex = nextIndex;
+
+  if (!state.isSolo) {
+    sendToServer('player_action', {
+      text, playerName: state.playerName, playerColor: myColor,
+    });
+    // Host generates narration, others wait
+    if (state.isHost) await generateNarration('action', text, state.playerName);
+    else { showTyping(); updateTurnUI(); renderSidebarPlayers(); }
+  } else {
+    await generateNarration('action', text, state.playerName);
+  }
+}
+
+async function generateNarration(type, playerAction, actorName) {
+  isGenerating = true;
+  showTyping();
+  updateTurnUI();
+
+  const genreName = state.genre?.name || 'Fantasy';
+  const genrePrompt = state.genre?.prompt || 'a fantasy world';
+
+  const systemPrompt = `You are an expert Game Master for a text RPG set in ${genrePrompt}.
+Scenario: ${state.scenario}
+Players: ${state.players.map(p => p.name).join(', ')}
+Round: ${state.roundCount}, Turn: ${state.turnCount + 1}
+
+Write vivid narration (2-3 paragraphs). React to player actions. Build tension. End prompting the next player (${state.players[state.currentPlayerIndex]?.name}) to act. Never end the story unless asked.`;
+
+  let messages;
+  if (type === 'opening') {
+    messages = [{ role:'user', content: `Begin the ${genreName} adventure! Set the scene vividly. End by prompting ${state.players[0]?.name} to take action.` }];
+  } else {
+    messages = [
+      ...state.storyMessages.slice(-10),
+      { role:'user', content: `${actorName} did: "${playerAction}". Narrate consequences and set up for ${state.players[state.currentPlayerIndex]?.name}.` }
+    ];
+  }
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + state.apiKey },
+      body: JSON.stringify({
+        model:'llama-3.3-70b-versatile',
+        messages:[{ role:'system', content: systemPrompt }, ...messages],
+        max_tokens:600,
+        temperature:0.85,
+      })
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const narration = data.choices?.[0]?.message?.content || 'The story continues...';
+
+    hideTyping();
+    addStoryEntry('narration', narration, 'Narrator');
+    state.storyMessages.push({role:'assistant', content: narration});
+
+    if (!state.isSolo) {
+      sendToServer('narration', {
+        text: narration,
+        currentPlayerIndex: state.currentPlayerIndex,
+        turnCount: state.turnCount,
+        roundCount: state.roundCount,
+      });
+    }
+
+    isGenerating = false;
+    updateTurnUI();
+    renderSidebarPlayers();
+
+  } catch(err) {
+    hideTyping();
+    isGenerating = false;
+    updateTurnUI();
+    showToast('AI Error: ' + (err.message || 'Something went wrong'), 'error');
+  }
+}
+
+async function endGame() {
+  if (!confirm('End the adventure?')) return;
+  state.gameActive = false;
+  if (!state.isSolo) sendToServer('end_game', {});
+  showLoading(true, 'Writing your legend...');
+
+  const summary = state.storyMessages.map(m => m.content).join('\n\n');
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + state.apiKey },
+      body: JSON.stringify({
+        model:'llama-3.3-70b-versatile',
+        messages:[
+          { role:'system', content:'You are a bard who writes epic summaries of adventures.' },
+          { role:'user', content:`Write a legendary 5-8 sentence summary of this adventure:\n\n${summary.substring(0,3000)}\n\nMention players by name. Make it feel epic.` }
+        ],
+        max_tokens:400,
+      })
+    });
+    const data = await res.json();
+    document.getElementById('gameover-summary').textContent = data.choices?.[0]?.message?.content || 'And so the legend was written...';
+  } catch(e) {
+    document.getElementById('gameover-summary').textContent = 'And so the adventurers\' tale came to an end, their deeds remembered forever.';
+  }
+
+  showLoading(false);
+  showScreen('screen-gameover');
+}
+
+function restartGame() {
+  state.scenario = ''; state.genre = null; state.submittedScenarios = []; state.myVote = null;
+  state.currentPlayerIndex = 0; state.turnCount = 0; state.roundCount = 1;
+  state.storyMessages = []; state.gameActive = false; isGenerating = false;
+  document.getElementById('story-scroll').innerHTML = '';
+  document.getElementById('quest-log').innerHTML = '';
+  document.getElementById('submit-scenario-btn').disabled = false;
+  document.getElementById('submit-scenario-btn').textContent = 'Submit Scenario →';
+  if (state.isSolo) proceedToScenario();
+  else showScreen('screen-waiting');
+}
+
+// Init
+renderGenreGrid();
+</script>
+</body>
+</html>
