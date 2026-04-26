@@ -180,7 +180,7 @@ select option { background:var(--bg2); }
 </div>
 
 <!-- LANDING -->
-<div id="screen-landing" class="screen active">
+<div id="screen-landing" class="screen">
   <div class="landing-hero">
     <div class="logo">SAGA</div>
     <div class="subtitle">AI-Powered Multiplayer Text RPG</div>
@@ -211,21 +211,23 @@ select option { background:var(--bg2); }
 </div>
 
 <!-- LOBBY -->
-<div id="screen-lobby" class="screen">
+<div id="screen-lobby" class="screen active">
   <div class="lobby-container">
     <div class="lobby-header">
       <div class="logo" style="font-size:32px">SAGA</div>
       <div class="subtitle">Choose Your Path</div>
     </div>
     <div class="lobby-tabs">
-      <button class="lobby-tab active" onclick="switchTab('create')">Create Room</button>
-      <button class="lobby-tab" onclick="switchTab('join')">Join Room</button>
+      <button class="lobby-tab active" onclick="switchTab('host')">Host Game</button>
+      <button class="lobby-tab" onclick="switchTab('join')">Join Game</button>
       <button class="lobby-tab" onclick="switchTab('solo')">Solo Play</button>
     </div>
-    <div class="lobby-panel active" id="panel-create">
-      <div class="field"><label>Your Name</label><input type="text" id="create-name" placeholder="Enter your name..." maxlength="20" /></div>
+    <div class="lobby-panel active" id="panel-host">
+      <div class="field"><label>Server URL</label><input type="text" id="host-server-url" placeholder="wss://your-server.onrender.com" /></div>
+      <div class="field"><label>Groq/OpenRouter API Key</label><input type="password" id="host-api-key" placeholder="gsk_... or sk-or-v1-..." autocomplete="off" /></div>
+      <div class="field"><label>Your Name</label><input type="text" id="host-name" placeholder="Enter your name..." maxlength="20" /></div>
       <div class="field"><label>Max Players</label>
-        <select id="create-maxplayers">
+        <select id="host-maxplayers">
           <option value="2">2 Players</option>
           <option value="3">3 Players</option>
           <option value="4" selected>4 Players</option>
@@ -236,17 +238,17 @@ select option { background:var(--bg2); }
       <button class="btn btn-primary" style="width:100%" onclick="createRoom()">Create Room</button>
     </div>
     <div class="lobby-panel" id="panel-join">
-      <div class="field"><label>Your Name</label><input type="text" id="join-name" placeholder="Enter your name..." maxlength="20" /></div>
+      <div class="field"><label>Server URL</label><input type="text" id="join-server-url" placeholder="wss://your-server.onrender.com" /></div>
       <div class="field"><label>Room Code</label><input type="text" id="join-code" placeholder="XXXX" maxlength="4" style="text-transform:uppercase;font-family:'Cinzel',serif;letter-spacing:0.2em;font-size:22px;text-align:center" /></div>
+      <div class="field"><label>Your Name</label><input type="text" id="join-name" placeholder="Enter your name..." maxlength="20" /></div>
       <button class="btn btn-primary" style="width:100%" onclick="joinRoom()">Join Room</button>
     </div>
     <div class="lobby-panel" id="panel-solo">
+      <div class="field"><label>Groq/OpenRouter API Key</label><input type="password" id="solo-api-key" placeholder="gsk_... or sk-or-v1-..." autocomplete="off" /></div>
       <div class="field"><label>Your Name</label><input type="text" id="solo-name" placeholder="Enter your name..." maxlength="20" /></div>
       <p style="color:var(--text2);font-size:15px;line-height:1.7;margin-bottom:20px;font-style:italic">Play alone with the AI as your Game Master. No server needed for solo play.</p>
       <button class="btn btn-primary" style="width:100%" onclick="startSolo()">Begin Solo Quest</button>
     </div>
-    <div style="margin-top:16px;text-align:center">
-      <button class="btn btn-sm" onclick="showScreen('screen-landing')">← Back</button>
     </div>
   </div>
 </div>
@@ -289,22 +291,6 @@ select option { background:var(--bg2); }
       <button class="btn btn-primary" style="flex:1" id="submit-scenario-btn" onclick="submitScenario()">Submit Scenario →</button>
     </div>
     <div style="font-size:13px;color:var(--text2);margin-top:10px;text-align:center" id="scenario-hint"></div>
-  </div>
-</div>
-
-<!-- VOTING -->
-<div id="screen-voting" class="screen">
-  <div class="voting-container">
-    <div class="voting-header">
-      <div class="logo" style="font-size:28px">Vote for Your Fate</div>
-      <div class="subtitle">Choose the scenario you want to play</div>
-    </div>
-    <div class="vote-timer" id="vote-timer">30</div>
-    <div id="vote-cards-container"></div>
-    <div style="margin-top:20px;text-align:center">
-      <button class="btn btn-primary" onclick="concludeVoting()">Confirm & Continue →</button>
-    </div>
-    <div style="font-size:13px;color:var(--text2);margin-top:10px;text-align:center">Vote for the scenario you want to play. Highest votes wins!</div>
   </div>
 </div>
 
@@ -380,7 +366,6 @@ let state = {
 };
 
 let ws = null;
-let voteTimerInterval = null;
 let isGenerating = false;
 
 // ── WEBSOCKET ──
@@ -397,8 +382,8 @@ function connectWS(url) {
 
 function setupWS(socket) {
   ws = socket;
-  ws.onmessage = (event) => {
-    try { handleServerMessage(JSON.parse(event.data)); }
+  ws.onmessage = async (event) => {
+    try { await handleServerMessage(JSON.parse(event.data)); }
     catch(e) { console.error('Parse error:', e); }
   };
   ws.onclose = () => {
@@ -419,7 +404,7 @@ function sendToServer(type, data) {
   return true;
 }
 
-function handleServerMessage(msg) {
+async function handleServerMessage(msg) {
   const { type, data } = msg;
   switch(type) {
     case 'room_created':
@@ -456,22 +441,16 @@ function handleServerMessage(msg) {
       renderWaitingRoom();
       break;
     case 'start_scenario':
-      renderGenreGrid();
-      updateScenarioHint();
-      showScreen('screen-scenario');
+      // Host-only flow no longer broadcasts scenario screen to players.
       break;
     case 'scenario_submitted':
-      if (!state.submittedScenarios.find(s => s.playerId === data.playerId)) {
-        state.submittedScenarios.push(data);
-      }
+      // No longer used, but keep for compatibility
       break;
     case 'start_voting':
-      state.submittedScenarios = data.scenarios;
-      showVoting();
+      // No longer used
       break;
     case 'vote_cast':
-      state.submittedScenarios = data.scenarios;
-      renderVoteCards();
+      // No longer used
       break;
     case 'start_game':
       state.scenario = data.scenario;
@@ -492,8 +471,13 @@ function handleServerMessage(msg) {
       state.turnCount = data.turnCount;
       state.roundCount = data.roundCount;
       updateQuestLog(data.playerName + ': ' + data.text.substring(0, 50) + '...');
-      // Only non-host shows typing; host already generated narration directly
-      if (!state.isHost) { showTyping(); updateTurnUI(); renderSidebarPlayers(); }
+      if (state.isHost && !state.isSolo && data.playerName !== state.playerName) {
+        await generateNarration('action', data.text, data.playerName);
+      } else {
+        showTyping();
+        updateTurnUI();
+        renderSidebarPlayers();
+      }
       break;
     case 'narration':
       hideTyping();
@@ -569,15 +553,12 @@ async function testConnection() {
 }
 
 function goToLobby() {
-  const key = document.getElementById('api-key-input').value.trim();
-  if (!key) { showToast('Enter your Groq API key first', 'error'); return; }
-  state.apiKey = key;
   showScreen('screen-lobby');
 }
 
 function switchTab(tab) {
   document.querySelectorAll('.lobby-tab').forEach((t,i) => {
-    t.classList.toggle('active', ['create','join','solo'][i] === tab);
+    t.classList.toggle('active', ['host','join','solo'][i] === tab);
   });
   document.querySelectorAll('.lobby-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
@@ -587,25 +568,27 @@ function switchTab(tab) {
 function generateId() { return Math.random().toString(36).substr(2,9); }
 
 async function createRoom() {
-  const name = document.getElementById('create-name').value.trim();
+  const serverUrl = document.getElementById('host-server-url').value.trim();
+  const apiKey = document.getElementById('host-api-key').value.trim();
+  const name = document.getElementById('host-name').value.trim();
+  if (!serverUrl) { showToast('Enter server URL', 'error'); return; }
+  if (!apiKey) { showToast('Enter API key', 'error'); return; }
   if (!name) { showToast('Enter your name', 'error'); return; }
 
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    // Try to connect first
-    const url = document.getElementById('server-url-input').value.trim() || state.serverUrl;
-    if (!url) { showToast('Connect to server first on the main screen', 'error'); return; }
     try {
-      const socket = await connectWS(url);
+      const socket = await connectWS(serverUrl);
       setupWS(socket);
-      state.serverUrl = url;
+      state.serverUrl = serverUrl;
     } catch(e) { showToast('Cannot connect to server', 'error'); return; }
   }
 
+  state.apiKey = apiKey;
   state.playerName = name;
   state.playerId = generateId();
   state.isHost = true;
   state.isSolo = false;
-  state.maxPlayers = parseInt(document.getElementById('create-maxplayers').value);
+  state.maxPlayers = parseInt(document.getElementById('host-maxplayers').value);
   const color = PLAYER_COLORS[0];
 
   sendToServer('create_room', {
@@ -617,18 +600,18 @@ async function createRoom() {
 }
 
 async function joinRoom() {
-  const name = document.getElementById('join-name').value.trim();
+  const serverUrl = document.getElementById('join-server-url').value.trim();
   const code = document.getElementById('join-code').value.trim().toUpperCase();
-  if (!name) { showToast('Enter your name', 'error'); return; }
+  const name = document.getElementById('join-name').value.trim();
+  if (!serverUrl) { showToast('Enter server URL', 'error'); return; }
   if (code.length !== 4) { showToast('Enter valid 4-letter room code', 'error'); return; }
+  if (!name) { showToast('Enter your name', 'error'); return; }
 
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    const url = document.getElementById('server-url-input').value.trim() || state.serverUrl;
-    if (!url) { showToast('Connect to server first on the main screen', 'error'); return; }
     try {
-      const socket = await connectWS(url);
+      const socket = await connectWS(serverUrl);
       setupWS(socket);
-      state.serverUrl = url;
+      state.serverUrl = serverUrl;
     } catch(e) { showToast('Cannot connect to server', 'error'); return; }
   }
 
@@ -647,8 +630,11 @@ async function joinRoom() {
 }
 
 function startSolo() {
+  const apiKey = document.getElementById('solo-api-key').value.trim();
   const name = document.getElementById('solo-name').value.trim();
+  if (!apiKey) { showToast('Enter API key', 'error'); return; }
   if (!name) { showToast('Enter your name', 'error'); return; }
+  state.apiKey = apiKey;
   state.playerName = name;
   state.playerId = generateId();
   state.isHost = true;
@@ -660,6 +646,7 @@ function startSolo() {
 function leaveRoom() {
   if (ws) { ws.close(); ws = null; }
   state.players = []; state.roomCode = '';
+  resetScenarioForm();
   showScreen('screen-lobby');
 }
 
@@ -687,13 +674,23 @@ function renderWaitingRoom() {
 }
 
 // ── SCENARIO ──
-function proceedToScenario() {
-  if (!state.isSolo) sendToServer('start_scenario', {});
+function resetScenarioForm() {
+  state.scenario = '';
+  state.genre = null;
   state.submittedScenarios = [];
   state.myVote = null;
-  state.genre = null;
+  const textarea = document.getElementById('custom-scenario');
+  textarea.value = '';
+  textarea.style.height = 'auto';
+  const btn = document.getElementById('submit-scenario-btn');
+  btn.disabled = false;
+  btn.textContent = 'Submit Scenario →';
   renderGenreGrid();
   updateScenarioHint();
+}
+
+function proceedToScenario() {
+  resetScenarioForm();
   showScreen('screen-scenario');
 }
 
@@ -711,15 +708,13 @@ function selectGenre(id) {
   document.querySelectorAll('.genre-card').forEach(c => c.classList.remove('selected'));
   document.getElementById('genre-' + id).classList.add('selected');
   const ta = document.getElementById('custom-scenario');
-  if (!ta.value.trim()) {
-    ta.value = 'A group of adventurers begin an epic ' + state.genre.name + ' journey — ' + state.genre.prompt + '.';
-  }
+  ta.value = 'A group of adventurers begin an epic ' + state.genre.name + ' journey — ' + state.genre.prompt + '.';
 }
 
 function updateScenarioHint() {
   document.getElementById('scenario-hint').textContent = state.isSolo
     ? 'Choose a genre and describe your scenario, then begin your solo quest.'
-    : 'Each player submits a scenario. You\'ll vote on which one to play!';
+    : 'As the host, choose a genre and describe the scenario to start the game.';
 }
 
 function submitScenario() {
@@ -740,65 +735,14 @@ function submitScenario() {
     return;
   }
 
-  const myScenario = { playerId: state.playerId, playerName: state.playerName, text: scenarioText, genre: genreObj, votes: 0 };
-  state.submittedScenarios.push(myScenario);
-  sendToServer('submit_scenario', myScenario);
+  // For multiplayer, only host can submit
+  if (!state.isHost) { showToast('Only the host can choose the scenario', 'error'); return; }
 
-  const btn = document.getElementById('submit-scenario-btn');
-  btn.disabled = true;
-  btn.textContent = '✓ Submitted — waiting for others...';
-  showToast('Scenario submitted!');
-}
+  state.scenario = scenarioText;
+  state.genre = genreObj;
 
-// ── VOTING ──
-function showVoting() {
-  showScreen('screen-voting');
-  renderVoteCards();
-  startVoteTimer();
-}
-
-function renderVoteCards() {
-  document.getElementById('vote-cards-container').innerHTML = state.submittedScenarios.map((s,i) => `
-    <div class="scenario-vote-card ${state.myVote === s.playerId ? 'voted' : ''}" onclick="castVote('${s.playerId}')">
-      <div class="vote-num">${i+1}</div>
-      <div class="vote-content">
-        <div class="vote-scenario-text">${s.text}</div>
-        <div class="vote-meta">${s.genre.icon} ${s.genre.name} — by ${s.playerName}</div>
-        <div class="vote-count">${s.votes || 0} vote${s.votes !== 1 ? 's' : ''}</div>
-      </div>
-    </div>`).join('');
-}
-
-function castVote(scenarioPlayerId) {
-  if (state.myVote) { showToast('Already voted!'); return; }
-  state.myVote = scenarioPlayerId;
-  sendToServer('cast_vote', { scenarioPlayerId });
-  renderVoteCards();
-  showToast('Vote cast!');
-}
-
-function startVoteTimer() {
-  if (voteTimerInterval) clearInterval(voteTimerInterval);
-  let t = 30;
-  document.getElementById('vote-timer').textContent = t;
-  voteTimerInterval = setInterval(() => {
-    t--;
-    document.getElementById('vote-timer').textContent = t;
-    if (t <= 0) { clearInterval(voteTimerInterval); concludeVoting(); }
-  }, 1000);
-}
-
-function concludeVoting() {
-  if (voteTimerInterval) clearInterval(voteTimerInterval);
-  const winner = state.submittedScenarios.reduce((a,b) => (b.votes||0) > (a.votes||0) ? b : a, state.submittedScenarios[0]);
-  if (!winner) { showToast('No scenarios!', 'error'); return; }
-
-  state.scenario = winner.text;
-  state.genre = winner.genre;
-
-  if (state.isHost) {
-    sendToServer('start_game', { scenario: winner.text, genre: winner.genre });
-  }
+  // Start game directly
+  sendToServer('start_game', { scenario: scenarioText, genre: genreObj });
 
   state.currentPlayerIndex = 0;
   state.storyMessages = [];
@@ -945,11 +889,17 @@ Write vivid narration (2-3 paragraphs). React to player actions. Build tension. 
   }
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    let apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+    let model = 'llama-3.3-70b-versatile';
+    if (state.apiKey.startsWith('sk-or-v1-')) {
+      apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+      model = 'inclusionai/ling-2.6-1t:free';
+    }
+    const res = await fetch(apiUrl, {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + state.apiKey },
       body: JSON.stringify({
-        model:'llama-3.3-70b-versatile',
+        model: model,
         messages:[{ role:'system', content: systemPrompt }, ...messages],
         max_tokens:600,
         temperature:0.85,
@@ -994,11 +944,17 @@ async function endGame() {
   const summary = state.storyMessages.map(m => m.content).join('\n\n');
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    let apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+    let model = 'llama-3.3-70b-versatile';
+    if (state.apiKey.startsWith('sk-or-v1-')) {
+      apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+      model = 'inclusionai/ling-2.6-1t:free';
+    }
+    const res = await fetch(apiUrl, {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + state.apiKey },
       body: JSON.stringify({
-        model:'llama-3.3-70b-versatile',
+        model: model,
         messages:[
           { role:'system', content:'You are a bard who writes epic summaries of adventures.' },
           { role:'user', content:`Write a legendary 5-8 sentence summary of this adventure:\n\n${summary.substring(0,3000)}\n\nMention players by name. Make it feel epic.` }
